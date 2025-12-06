@@ -20,17 +20,20 @@ st.markdown(
         background: radial-gradient(circle at top left, #e0f2fe 0, #fdf2ff 35%, #ffffff 100%);
     }
     .block-container {
-    padding-top: 4rem;
+    padding-top: 2rem;
     padding-bottom: 3rem;
     max-width: 900px;
     }
+    
     /* 헤더 텍스트 살짝 꾸미기 */
     .main-title {
-        font-size: 2.2rem;
-        font-weight: 800;
-        letter-spacing: -0.03em;
-        margin-bottom: 0.3rem;
+    margin-top: 1rem;
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 0.3rem;
     }
+
     .main-subtitle {
         font-size: 0.95rem;
         color: #6b7280;
