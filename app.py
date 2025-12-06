@@ -4,8 +4,7 @@ import streamlit as st
 # 페이지 기본 설정
 # ---------------------
 st.set_page_config(
-    st.markdown("---")
-    page_title="통합 계산기",
+    page_title="/n통합 계산기",
     page_icon="🧮",
     layout="wide",
 )
