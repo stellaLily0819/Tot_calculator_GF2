@@ -4,7 +4,7 @@ import streamlit as st
 # 페이지 기본 설정
 # ---------------------
 st.set_page_config(
-    page_title="/n통합 계산기",
+    page_title="통합 계산기",
     page_icon="🧮",
     layout="wide",
 )
@@ -13,18 +13,16 @@ st.set_page_config(
 # 커스텀 CSS
 # ---------------------
 st.markdown(
+    .block-container {
+    padding-top: 4rem;
+    padding-bottom: 3rem;
+    max-width: 900px;
+}
     """
     <style>
     /* 메인 배경 */
     .stApp {
         background: radial-gradient(circle at top left, #e0f2fe 0, #fdf2ff 35%, #ffffff 100%);
-    }
-    
-    /* 전체 컨텐츠 폭 조금 줄이기 */
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-        max-width: 900px;
     }
 
     /* 헤더 텍스트 살짝 꾸미기 */
