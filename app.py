@@ -62,7 +62,7 @@ st.markdown(
     .calculator-subtitle {
         font-size: 0.85rem;
         color: #6b7280;
-        margin-bottom: 1rem;
+        margin-bottom: 2rem;
     }
 
     /* 탭 스타일 */
