@@ -1,82 +1,70 @@
 import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 # ---------------------
 # 페이지 기본 설정
 # ---------------------
 st.set_page_config(
-    page_title="통합 계산기",
+    page_title="통합 데미지 계산기",
     page_icon="🧮",
     layout="wide",
 )
 
 # ---------------------
-# 커스텀 CSS
+# 커스텀 CSS (전부 문자열 안에 있음!) 
 # ---------------------
 st.markdown(
     """
     <style>
-    /* 메인 배경 */
+    /* 전체 배경 */
     .stApp {
         background: radial-gradient(circle at top left, #e0f2fe 0, #fdf2ff 35%, #ffffff 100%);
     }
+
+    /* 내용 영역 여백 & 폭 */
     .block-container {
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-    max-width: 900px;
+        padding-top: 4rem;   /* 🔽 제목 잘리지 않도록 위쪽 여백 */
+        padding-bottom: 3rem;
+        max-width: 1100px;
     }
-    
-    /* 헤더 텍스트 살짝 꾸미기 */
+
+    /* 상단 타이틀 영역 */
     .main-title {
-    margin-top: 1rem;
-    font-size: 2.2rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    margin-bottom: 0.3rem;
+        font-size: 2.2rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        margin-bottom: 0.3rem;
     }
 
     .main-subtitle {
         font-size: 0.95rem;
         color: #6b7280;
-        margin-bottom: 1.2rem;
+        margin-bottom: 1.4rem;
     }
 
-    /* 계산기 카드 박스 */
+    /* 계산기 카드 */
     .calculator-card {
-        background: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.92);
         border-radius: 20px;
-        padding: 1.5rem 1.8rem;
-        border: 1px solid rgba(148, 163, 184, 0.18);
+        padding: 1.6rem 1.9rem;
+        border: 1px solid rgba(148, 163, 184, 0.2);
         box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
-        backdrop-filter: blur(12px);
-    }
-
-    .calculator-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        margin-bottom: 0.2rem;
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-    }
-
-    .calculator-subtitle {
-        font-size: 0.85rem;
-        color: #6b7280;
-        margin-bottom: 0.5rem;
+        backdrop-filter: blur(10px);
+        margin-bottom: 1.5rem;
     }
 
     /* 탭 스타일 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 4px;
     }
-
     .stTabs [data-baseweb="tab"] {
-        padding: 0.6rem 0.9rem;
+        padding: 0.45rem 0.9rem;
         border-radius: 999px;
-        background-color: rgba(255, 255, 255, 0.7);
-        border: 1px solid rgba(148, 163, 184, 0.4);
+        background-color: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.5);
     }
-
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #4f46e5, #ec4899);
         color: white !important;
@@ -87,149 +75,292 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ---------------------
-# 계산기 1 (예시: 사칙연산)
-# ---------------------
+# =========================================================
+# 계산기 1 : 무기 효율 계산기
+# =========================================================
 def calculator_one():
-    st.markdown(
-        """
-        <div class="calculator-card">
-            <div class="calculator-title">🧮 기본 계산기</div>
-            <div class="calculator-subtitle">두 숫자를 입력하고 원하는 연산을 선택해 보세요.</div>
-        """,
-        unsafe_allow_html=True,
+    # ------- 내부 계산 함수 -------
+    def compute_z(buff_x, buff_y, atk, E_def, def_coef, Weak_coef, sk_coef):
+        numer = atk ** 2
+        denomi = atk + E_def * (1 - def_coef * 0.01)
+        return (
+            (numer / denomi)
+            * (1 + buff_x * 0.01)
+            * (1 + Weak_coef * 0.1)
+            * (sk_coef * 0.01)
+            * (buff_y * 0.01)
+        )
+
+    st.markdown("<div class='calculator-card'>", unsafe_allow_html=True)
+
+    st.markdown("### 🔧 무기 효율 계산기")
+    st.caption("무기 A / B 옵션에 따른 최종 데미지와 효율 비교")
+
+    # 사이드바 공통 변수
+    st.sidebar.markdown(
+        "<p style='text-align: center; font-size: 12px; color: gray;'>Made by Caleo01</p>",
+        unsafe_allow_html=True
     )
+    st.sidebar.markdown("---")
+    st.sidebar.header("공통 변수 설정")
+    E_def = st.sidebar.number_input("적 방어력", min_value=0.0, value=5000.0, max_value=20000.0, step=100.0, format="%.0f")
+    atk_origin = st.sidebar.number_input("기초 공격력 (공% 제외 약 1600)", min_value=500.0, max_value=3000.0, value=1661.0, step=1.0, format="%.0f")
+    atk_bonus = st.sidebar.number_input("기초 공격 보너스(%) (수정 X)", min_value=0.0, max_value=200.0, value=65.6, step=10.0, format="%.1f")
+    def_coef = st.sidebar.number_input("방어 무시(%)", min_value=0.0, max_value=100.0, value=30.0, step=10.0, format="%.0f")
+    Weak_coef = st.sidebar.number_input("약점 (개)", min_value=0.0, max_value=2.0, value=0.0, step=1.0, format="%.0f")
+    sk_coef = st.sidebar.number_input("스킬 계수(%)", min_value=0.0, max_value=1500.0, value=100.0, step=10.0, format="%.0f")
+    st.sidebar.markdown("---")
+    buff_x = st.sidebar.number_input("피해 증가(%)", min_value=0.0, max_value=800.0, value=0.0, step=10.0, format="%.0f")
+    buff_y = st.sidebar.number_input("치명 피해(%)", min_value=0.0, max_value=500.0, value=120.0, step=10.0, format="%.0f")
 
-    col1, col2 = st.columns(2)
+    # 직군
+    st.subheader("인형 포지션")
+    choice_doll = st.radio(
+        "무기 옵션",
+        options=["센티널", "뱅가드", "서포트", "불워크"],
+        horizontal=True,
+        key="Doll_option"
+    )
+    if choice_doll == "센티널":
+        atk_per = 22.0
+        ct_per = 0.0
+    elif choice_doll == "뱅가드":
+        atk_per = 17.0
+        ct_per = 10.0
+    elif choice_doll == "서포트":
+        atk_per = 17.0
+        ct_per = 0.0
+    elif choice_doll == "불워크":
+        atk_per = 0.0
+        ct_per = 0.0
+    st.markdown("---")
+
+    # ----------------- 무기 A -----------------
+    st.subheader("무기 A")
+
+    col1, col2 = st.columns([2, 1])
     with col1:
-        a = st.number_input("첫 번째 숫자", value=0.0, key="c1_a")
+        wep_atk_A_slider = st.slider("무기 공격력", 200.0, 390.0, 390.0, step=1.0, format="%.0f", key="wep_atk_A")
     with col2:
-        b = st.number_input("두 번째 숫자", value=0.0, key="c1_b")
+        wep_atk_A_input = st.number_input("직접 입력 (적용 값)", min_value=200.0, max_value=390.0, value=wep_atk_A_slider, step=1.0, format="%.0f", key="wep_atk_A_w")
+    wep_atk_A = wep_atk_A_input
 
-    op = st.segmented_control("연산자", ["+", "-", "×", "÷"], key="c1_op")
+    wepA_ak = 0.0
+    wepA_ct = 0.0
+    choice_A = st.radio(
+        "무기 옵션",
+        options=["공격 보너스 15%", "치명타 피해 25%"],
+        horizontal=True,
+        key="weaponA_option"
+    )
+    if choice_A == "공격 보너스 15%":
+        wepA_ak = 15.0
+    elif choice_A == "치명타 피해 25%":
+        wepA_ct = 25.0
 
-    calc_col1, calc_col2 = st.columns([1, 1.5])
-    with calc_col1:
-        calc_btn = st.button("결과 보기", key="calc1_button")
-    with calc_col2:
-        st.caption("Tip: 나눗셈에서 0으로 나누지 않도록 주의하세요!")
+    def_A = st.number_input("방어 무시(%)", min_value=0.0, max_value=20.0, value=0.0, step=10.0, format="%.0f", key="def_ignore_A")
+    total_def_A = min(def_A + def_coef, 100.0)
 
-    if calc_btn:
-        if op == "+":
-            result = a + b
-        elif op == "-":
-            result = a - b
-        elif op == "×":
-            result = a * b
-        else:
-            result = "0으로 나눌 수 없습니다." if b == 0 else a / b
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        dmg_A_slider = st.slider("무기 피증 계수 (합산)", 0.0, 100.0, 10.0, step=1.0, format="%.0f", key="dmg_buff_A")
+    with col2:
+        dmg_A_input = st.number_input("직접 입력 (적용 값)", min_value=0.0, max_value=100.0, value=dmg_A_slider, step=1.0, format="%.0f", key="dmg_buff_A_w")
+    dmg_A = dmg_A_input
 
-        st.markdown("---")
-        st.metric(label="계산 결과", value=result)
+    st.write(f"관리실 공격력: {(atk_origin+wep_atk_A)*(1+(atk_bonus+atk_per+wepA_ak)*0.01):.0f}")
+
+    st.markdown("---")
+
+    # ----------------- 무기 B -----------------
+    st.subheader("무기 B")
+
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        wep_atk_B_slider = st.slider("무기 공격력", 200.0, 390.0, 390.0, step=1.0, format="%.0f", key="wep_atk_B")
+    with col2:
+        wep_atk_B_input = st.number_input("직접 입력 (적용 값)", min_value=200.0, max_value=390.0, value=wep_atk_B_slider, step=1.0, format="%.0f", key="wep_atk_B_w")
+    wep_atk_B = wep_atk_B_input
+
+    wepB_ak = 0.0
+    wepB_ct = 0.0
+    choice_B = st.radio(
+        "무기 옵션",
+        options=["공격 보너스 15%", "치명타 피해 25%"],
+        horizontal=True,
+        key="weaponB_option"
+    )
+    if choice_B == "공격 보너스 15%":
+        wepB_ak = 15.0
+    elif choice_B == "치명타 피해 25%":
+        wepB_ct = 25.0
+
+    def_B = st.number_input("방어 무시(%)", min_value=0.0, max_value=20.0, value=0.0, step=10.0, format="%.0f", key="def_ignore_B")
+    total_def_B = min(def_B + def_coef, 100.0)
+
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        dmg_B_slider = st.slider("무기 피증 계수 (합산)", 0.0, 100.0, 10.0, step=1.0, format="%.0f", key="dmg_buff_B")
+    with col2:
+        dmg_B_input = st.number_input("직접 입력 (적용 값)", min_value=0.0, max_value=100.0, value=dmg_B_slider, step=1.0, format="%.0f", key="dmg_buff_B_w")
+    dmg_B = dmg_B_input
+
+    st.write(f"관리실 공격력: {(atk_origin+wep_atk_B)*(1+(atk_bonus+atk_per+wepB_ak)*0.01):.0f}")
+
+    st.markdown("---")
+
+    # 결과 계산
+    final_dmg_A = buff_x + dmg_A
+    final_dmg_B = buff_x + dmg_B
+    final_ct_A = buff_y + wepA_ct + ct_per
+    final_ct_B = buff_y + wepB_ct + ct_per
+    final_atk_A = (atk_origin+wep_atk_A)*(1+(atk_bonus+atk_per+wepA_ak)*0.01)
+    final_atk_B = (atk_origin+wep_atk_B)*(1+(atk_bonus+atk_per+wepB_ak)*0.01)
+    damage_A = compute_z(final_dmg_A, final_ct_A, final_atk_A, E_def, total_def_A, Weak_coef, sk_coef)
+    damage_B = compute_z(final_dmg_B, final_ct_B, final_atk_B, E_def, total_def_B, Weak_coef, sk_coef)
+
+    diff = damage_B - damage_A
+    efficiency = (damage_B / damage_A - 1) * 100 if damage_A != 0 else 0
+
+    if diff > 0:
+        st.success(f"무기 B가 {diff:,.0f} 데미지만큼 강력하며, 효율은 {efficiency:.2f}% 더 좋습니다.")
+    elif diff < 0:
+        st.error(f"무기 A가 {-diff:,.0f} 데미지만큼 강력하며, 효율은 {-efficiency:.2f}% 더 좋습니다.")
+    else:
+        st.info("무기 A와 B의 최종 데미지가 동일합니다.")
+
+    st.write("피증 변화만을 고려한 데미지 변화 (세로선 - 무기 포함 최종 데미지)")
+    st.markdown(f"""
+    **참고:**  
+    - 파란 점선 = 무기 A 현재 공격력 ({final_atk_A:.0f})  
+    - 빨간 점선 = 무기 B 현재 공격력 ({final_atk_B:.0f})  
+    """)
+
+    atk_range = np.linspace(0, 8000, 200)
+    damage_curve_A = [
+        compute_z(final_dmg_A, final_ct_A, atk, E_def, total_def_A, Weak_coef, sk_coef)
+        for atk in atk_range
+    ]
+    damage_curve_B = [
+        compute_z(final_dmg_B, final_ct_B, atk, E_def, total_def_B, Weak_coef, sk_coef)
+        for atk in atk_range
+    ]
+    efficiency_curve = [(b/a - 1) * 100 if a != 0 else 0 for a, b in zip(damage_curve_A, damage_curve_B)]
+
+    fig, ax1 = plt.subplots(figsize=(9, 6))
+
+    ax1.plot(atk_range, damage_curve_A, label="Weapon A", color="blue")
+    ax1.plot(atk_range, damage_curve_B, label="Weapon B", color="red")
+    ax1.axvline(final_atk_A, color="blue", linestyle=":")
+    ax1.axvline(final_atk_B, color="red", linestyle=":")
+    ax1.set_xlabel("ATK")
+    ax1.set_ylabel("Final Damage")
+    ax1.legend(loc="upper left")
+    ax1.grid(True)
+
+    ax2 = ax1.twinx()
+    ax2.plot(atk_range, efficiency_curve, label="Efficiency (B vs A, %)", color="green", linestyle="--")
+    ax2.set_ylabel("Efficiency (%)")
+    ax2.axhline(0, color="black", linestyle=":")
+    ax2.legend(loc="upper right")
+
+    st.pyplot(fig)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ---------------------
-# 계산기 2 (예시: BMI)
-# ---------------------
+# =========================================================
+# 계산기 2 : 실시간 데미지 계산 3D 그래프
+# =========================================================
 def calculator_two():
+    # z 계산 함수
+    def compute_z(x, y, atk, defense, w, skill, multiplier):
+        numerator = atk ** 2
+        denominator = atk + defense * (1 - w * 0.01)
+        return (numerator / denominator) * (1 + x * 0.01) * multiplier * (skill * 0.01) * (y * 0.01)
+
+    st.markdown("<div class='calculator-card'>", unsafe_allow_html=True)
+
+    st.markdown("### 📈 실시간 데미지 계산 3D 그래프")
     st.markdown(
-        """
-        <div class="calculator-card">
-            <div class="calculator-title">⚖️ BMI 계산기</div>
-            <div class="calculator-subtitle">키와 몸무게로 간단하게 BMI를 계산해 보세요.</div>
-        """,
-        unsafe_allow_html=True,
+        """<p style='font-size: 12px; color: gray;'>
+        Made by Caleo01 | Powered by Streamlit
+        </p>""",
+        unsafe_allow_html=True
     )
 
-    col1, col2 = st.columns(2)
-    with col1:
-        height = st.number_input("키 (cm)", value=170, min_value=50, max_value=250, key="c2_h")
-    with col2:
-        weight = st.number_input("몸무게 (kg)", value=65.0, min_value=10.0, max_value=300.0, key="c2_w")
+    st.latex(r'''\small
+    z = \left( \frac{{\text{공격력}^2}}{{\text{공격력} + \text{적 방어력} \cdot (1 - 방깎)}} \right)
+    \cdot (피증) \cdot (약점계수) \cdot (스킬계수) \cdot (치피)
+    ''')
 
-    if st.button("BMI 계산하기", key="calc2_button"):
-        if height > 0:
-            bmi = weight / ((height / 100) ** 2)
+    multiplier = st.radio("약점 계수:", [1.0, 1.1, 1.2], index=0, horizontal=True)
+    skill = st.slider("스킬 계수 %", 10, 800, 100, step=10)
+    st.markdown("---")
+    atk = st.slider("공격력", 0, 8000, 1000, step=10)
+    defense = st.slider("적 방어력", 0, 7000, 1000, step=10)
+    w = st.slider("방어감소 %", 0, 100, 50, step=10)
+    x = st.slider("피해증가 %", 0, 500, 100, step=10)
+    y = st.slider("치명피해 %", 0, 400, 100, step=10)
 
-            if bmi < 18.5:
-                status = "저체중"
-            elif bmi < 23:
-                status = "정상"
-            elif bmi < 25:
-                status = "과체중"
-            else:
-                status = "비만"
+    z_val = compute_z(x, y, atk, defense, w, skill, multiplier)
+    st.write(f"약점 계수 값: {multiplier}")
+    st.write(f"스킬 계수 값: {skill}")
+    st.markdown("---")
+    st.markdown(f"### 실제 데미지 (z): `{z_val:.2f}`")
 
-            st.markdown("---")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("BMI", f"{bmi:.2f}")
-            with col2:
-                st.metric("판정", status)
-            st.caption("※ BMI는 참고용 지표이며, 정확한 건강 상태는 전문가 상담이 필요합니다.")
-        else:
-            st.error("키는 0보다 크게 입력해주세요.")
+    x_vals = np.linspace(0, 400, 50)
+    y_vals = np.linspace(0, 500, 50)
+    X, Y = np.meshgrid(x_vals, y_vals)
+    Z = compute_z(X, Y, atk, defense, w, skill, multiplier)
+
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111, projection='3d')
+    surf = ax.plot_surface(X, Y, Z, cmap='plasma', edgecolor='none', alpha=0.8)
+    ax.scatter(x, y, z_val, color='red', s=50, label='Current')
+    ax.set_xlabel('Dmg Increase (%)')
+    ax.set_ylabel('Crit (%)')
+    ax.set_zlabel('Actual Dmg')
+    ax.set_title(f'3D Dmg Graph (atk={atk}, def={defense}, w={w}%)')
+    ax.legend()
+
+    st.pyplot(fig)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ---------------------
-# 계산기 3 (예시: 환율)
-# ---------------------
+# =========================================================
+# 계산기 3 : (추가용 자리)
+# =========================================================
 def calculator_three():
-    st.markdown(
-        """
-        <div class="calculator-card">
-            <div class="calculator-title">💱 환율 계산기</div>
-            <div class="calculator-subtitle">원화를 기준으로 달러로 환산해 보세요.</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    col1, col2 = st.columns(2)
-    with col1:
-        krw = st.number_input("원화 (KRW)", value=10000, step=1000, key="c3_krw")
-    with col2:
-        rate = st.number_input("환율 (1 USD = ? KRW)", value=1300.0, min_value=1.0, key="c3_rate")
-
-    if st.button("USD로 계산하기", key="calc3_button"):
-        usd = krw / rate
-        st.markdown("---")
-        st.metric("달러 환산 값", f"{usd:.2f} USD")
-        st.caption("실제 환율/수수료에 따라 실제 금액은 달라질 수 있습니다.")
-
+    st.markdown("<div class='calculator-card'>", unsafe_allow_html=True)
+    st.markdown("### 🧪 계산기 3 (추가 예정)")
+    st.info("여기에 3번 계산기 코드를 넣으면 됩니다.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ---------------------
+# =========================================================
 # 메인 앱
-# ---------------------
+# =========================================================
 def main():
-    # 상단 헤더
     st.markdown(
         """
         <div>
-            <div class="main-title">통합 계산기 대시보드</div>
+            <div class="main-title">통합 데미지 계산 대시보드</div>
             <div class="main-subtitle">
-                하나의 화면에서 여러 계산기를 편하게 사용할 수 있는 올인원 도구입니다. <br/>
-                상단 탭에서 원하는 계산기를 선택하세요.
+                무기 효율 비교, 실시간 데미지 3D 그래프 등 여러 계산기를 하나의 화면에서 사용하세요.
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # 탭
-    tab1, tab2, tab3 = st.tabs(["기본 계산기", "BMI 계산기", "환율 계산기"])
+    tab1, tab2, tab3 = st.tabs(["무기 효율 계산기", "3D 데미지 그래프", "계산기 3"])
 
     with tab1:
         calculator_one()
-
     with tab2:
         calculator_two()
-
     with tab3:
         calculator_three()
 
