@@ -62,7 +62,7 @@ st.markdown(
     .calculator-subtitle {
         font-size: 0.85rem;
         color: #6b7280;
-        margin-bottom: 2rem;
+        margin-bottom: 0.5rem;
     }
 
     /* 탭 스타일 */
@@ -71,7 +71,7 @@ st.markdown(
     }
 
     .stTabs [data-baseweb="tab"] {
-        padding: 0.4rem 0.9rem;
+        padding: 0.6rem 0.9rem;
         border-radius: 999px;
         background-color: rgba(255, 255, 255, 0.7);
         border: 1px solid rgba(148, 163, 184, 0.4);
