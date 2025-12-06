@@ -14,9 +14,9 @@ st.set_page_config(
 # ---------------------
 st.markdown(
     .block-container {
-    padding-top: 4rem;
-    padding-bottom: 3rem;
-    max-width: 900px;
+    padding-top:4rem;
+    padding-bottom:3rem;
+    max-width:900px;
 }
     """
     <style>
