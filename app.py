@@ -20,23 +20,41 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* 전체 배경 */
+    /* 1) 다크모드도 무시하고 전체 배경을 "밝게" 고정 */
+    html, body {
+        background-color: #f3f4f6 !important;  /* 아주 밝은 회색 */
+    }
+
+    /* 메인 앱 배경: 그라데이션 + 밝은 톤, 다크테마 덮어쓰기 위해 !important */
     .stApp {
-        background: radial-gradient(circle at top left, #e0f2fe 0, #fdf2ff 35%, #ffffff 100%);
+        background: radial-gradient(circle at top left, #e0f2fe 0, #fdf2ff 35%, #ffffff 100%) !important;
+    }
+
+    /* 메인 컨텐츠 영역 배경도 투명 처리해서 위 그라데이션이 보이게 */
+    [data-testid="stAppViewContainer"] {
+        background: transparent !important;
+    }
+
+    /* 헤더/사이드바도 어두운 배경 제거 */
+    [data-testid="stHeader"] {
+        background: transparent !important;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #e5e7eb !important;  /* 밝은 회색 사이드바 */
     }
 
     /* 컨텐츠 영역 여백 & 폭 */
     .block-container {
-        padding-top: 4rem;   /* 제목 안 잘리도록 */
+        padding-top: 4rem;
         padding-bottom: 3rem;
         max-width: 1100px;
     }
 
-    /* 기본 텍스트 색 강제 (다크모드 대비) */
+    /* 기본 텍스트 색: 진한 회색 (다크모드 대비) */
     html, body, .stApp, .block-container {
         color: #111827;
     }
-    /* 거의 모든 텍스트를 진한 색으로 */
+    /* 거의 모든 텍스트를 진한 색으로 덮어쓰기 */
     * {
         color: #111827 !important;
     }
@@ -77,13 +95,14 @@ st.markdown(
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #4f46e5, #ec4899);
-        color: #ffffff !important;   /* 선택된 탭만 흰색 글자 */
+        color: #ffffff !important;
         border: none;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 # =========================================================
 # 계산기 1 : 무기 효율 계산기
