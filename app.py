@@ -56,14 +56,6 @@ st.markdown(
         box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
         backdrop-filter: blur(10px);
         margin-bottom: 1.5rem;
-
-        /* 다크 모드에서도 글자 진하게 보이도록 */
-        color: #111827;
-    }
-
-    /* 카드 안의 모든 텍스트/레이블을 진한 글자색으로 고정 */
-    .calculator-card * {
-        color: #111827 !important;
     }
 
     /* 탭 스타일 */
@@ -75,16 +67,27 @@ st.markdown(
         border-radius: 999px;
         background-color: rgba(255, 255, 255, 0.85);
         border: 1px solid rgba(148, 163, 184, 0.5);
+        color: #111827 !important;
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #4f46e5, #ec4899);
         color: white !important;
         border: none;
     }
+
+    /* 🔥 여기서부터가 핵심: 페이지 전체 텍스트 색 강제 */
+    html, body, .stApp, .block-container,
+    .calculator-card, .calculator-card * ,
+    p, span, label,
+    .stMarkdown, .stText, .stRadio, .stNumberInput,
+    .stSlider, .stSelectbox, .stDataFrame, .stMetric, .stCheckbox {
+        color: #111827 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 # =========================================================
 # 계산기 1 : 무기 효율 계산기
