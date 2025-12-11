@@ -20,27 +20,23 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* 1) 다크모드도 무시하고 전체 배경을 "밝게" 고정 */
+    /* 1) 다크모드 무시하고 전체 배경 밝게 고정 */
     html, body {
-        background-color: #f3f4f6 !important;  /* 아주 밝은 회색 */
+        background-color: #f3f4f6 !important;
     }
 
-    /* 메인 앱 배경: 그라데이션 + 밝은 톤, 다크테마 덮어쓰기 위해 !important */
     .stApp {
         background: radial-gradient(circle at top left, #e0f2fe 0, #fdf2ff 35%, #ffffff 100%) !important;
     }
 
-    /* 메인 컨텐츠 영역 배경도 투명 처리해서 위 그라데이션이 보이게 */
     [data-testid="stAppViewContainer"] {
         background: transparent !important;
     }
-
-    /* 헤더/사이드바도 어두운 배경 제거 */
     [data-testid="stHeader"] {
         background: transparent !important;
     }
     [data-testid="stSidebar"] {
-        background-color: #e5e7eb !important;  /* 밝은 회색 사이드바 */
+        background-color: #e5e7eb !important;
     }
 
     /* 컨텐츠 영역 여백 & 폭 */
@@ -50,11 +46,12 @@ st.markdown(
         max-width: 1100px;
     }
 
-    /* 기본 텍스트 색: 진한 회색 (다크모드 대비) */
+    /* 기본 텍스트 색 */
     html, body, .stApp, .block-container {
         color: #111827;
     }
-    /* 거의 모든 텍스트를 진한 색으로 덮어쓰기 */
+
+    /* 거의 모든 텍스트를 진한 색으로 (라벨, 캡션 등) */
     * {
         color: #111827 !important;
     }
@@ -98,10 +95,47 @@ st.markdown(
         color: #ffffff !important;
         border: none;
     }
+
+    /* 🔥 입력 상자 / 숫자 입력 / 셀렉트박스 / 텍스트 영역 스타일 */
+    input, textarea {
+        background-color: #ffffff !important;
+        color: #111827 !important;
+    }
+
+    /* Streamlit TextInput */
+    .stTextInput > div > div > input {
+        background-color: #ffffff !important;
+        color: #111827 !important;
+    }
+
+    /* Streamlit NumberInput */
+    .stNumberInput input {
+        background-color: #ffffff !important;
+        color: #111827 !important;
+    }
+
+    /* Streamlit Selectbox */
+    .stSelectbox div[role="combobox"] {
+        background-color: #ffffff !important;
+        color: #111827 !important;
+    }
+
+    /* TextArea */
+    .stTextArea textarea {
+        background-color: #ffffff !important;
+        color: #111827 !important;
+    }
+
+    /* BaseWeb input 컴포넌트 (내부적으로 사용하는 인풋 래퍼) */
+    [data-baseweb="input"] > div {
+        background-color: #ffffff !important;
+        color: #111827 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
@@ -361,6 +395,10 @@ def calculator_three():
     # 점수 계산 로직
     # -----------------------------
     def compute_a(P: int) -> int:
+        """
+        누적 활동치 P에 따른 추가 평가점수 a(P)를 계산.
+        각 마일스톤을 넘을 때마다 보너스를 누적해서 더함.
+        """
         bonus_table = [
             ([900, 1800, 2700], 40),
             ([4500, 9000, 15000, 24000, 36000], 100),
@@ -374,6 +412,7 @@ def calculator_three():
                 300,
             ),
         ]
+
         a = 0
         for thresholds, bonus in bonus_table:
             for t in thresholds:
@@ -382,6 +421,12 @@ def calculator_three():
         return a
 
     def compute_m(k: int) -> int:
+        """
+        활동치 k에 따른 보너스 m(k) 계산.
+        - k < 3800: 0점
+        - 3800 ~ 4800: 27점
+        - 4800 초과: 27 + floor((k - 4800) / 80)
+        """
         if k < 3800:
             return 0
         if k <= 4800:
@@ -389,10 +434,17 @@ def calculator_three():
         extra = (k - 4800) // 80
         return 27 + extra
 
-    def compute_P(k: int, n: int, days: int = 8) -> int:
+    def compute_P(k: int, n: int, days: int) -> int:
+        """
+        days일 동안의 누적 활동치 P = days * k * n
+        """
         return days * k * n
 
-    def model_total_score(k: int, n: int, days: int = 8) -> tuple[int, int, int, int]:
+    def model_total_score(k: int, n: int, days: int) -> tuple[int, int, int, int]:
+        """
+        (k, n, days)에 따른 모델 총점과 구성요소 계산.
+        x_hat = 590 + m(k) + a(P)
+        """
         P = compute_P(k, n, days=days)
         a = compute_a(P)
         m = compute_m(k)
@@ -404,20 +456,27 @@ def calculator_three():
         k_min: int,
         k_max: int,
         k_step: int,
-        days: int = 8,
+        days: int,
         top_k: int = 5,
     ):
+        """
+        n은 항상 1 ~ 30 전체 탐색.
+        k 범위 내에서 (k, n)을 브루트포스로 탐색해
+        x_hat이 target_x에 가장 근접한 상위 top_k개 반환.
+        """
         best_list = []
+
         for k in range(k_min, k_max + 1, k_step):
-            for n in range(1, 31):  # 하루 평균 횟수: 1~30
+            for n in range(1, 31):  # 하루 평균 횟수: 1 ~ 30
                 x_hat, P, a, m = model_total_score(k, n, days=days)
                 diff = abs(x_hat - target_x)
                 best_list.append((diff, k, n, x_hat, P, a, m))
+
         best_list.sort(key=lambda x: x[0])
         return best_list[:top_k]
 
     # -----------------------------
-    # UI
+    # Streamlit UI (카드 래핑)
     # -----------------------------
     st.markdown("<div class='calculator-card'>", unsafe_allow_html=True)
 
@@ -425,13 +484,13 @@ def calculator_three():
 
     st.markdown(
         """
-입력한 **총 점수 x**를 기준으로  
-8일 동안의 **평균 활동 점수 k**와 **평균 활동 횟수 n(1일 기준)** 을 추론합니다.
+입력한 **총 점수 x**를 기준으로,  
+지정한 일수 동안의 **평균 활동 점수 k**와 **평균 활동 횟수 n(1일 기준)** 을 추론합니다.
 
-- 기간: 총 **8일**
+- 진행 일수: 사용자가 직접 입력 (예: 8일)
 - 하루 평균 활동 횟수: `n` (1 ~ 30)
 - 평균 활동 점수: `k`
-- 누적 활동치: `P = 8 × k × n`
+- 누적 활동치: `P = days × k × n`
 - 활동 보너스 `m(k)`:
   - k = 3800 ~ 4800 → 27점
   - k > 4800 → 27 + ⌊(k - 4800) / 80⌋
@@ -443,20 +502,34 @@ def calculator_three():
   - P = 375000, 420000, 480000, 540000, 600000, 675000, 788000, 900000, 1050000, 1200000, 1350000 → 각 +300
 - 총 점수 모델:  
   \\( \\hat{x} = 590 + m(k) + a(P) \\)
+
+입력한 x와 \\( \\hat{x} \\)의 차이가 가장 작은 `(k, n)` 조합을 찾아줍니다.
 """,
         unsafe_allow_html=True,
     )
 
-    st.subheader("1. 총 점수 x 입력")
-    target_x = st.number_input(
-        "총 점수 x (이 값에 가장 가까운 모델 점수를 만드는 k, n을 찾습니다)",
-        min_value=0,
-        max_value=5_000_000,
-        value=5000,
-        step=10,
-    )
+    st.subheader("1. 총 점수 x 및 진행 일수 입력")
+
+    colx1, colx2 = st.columns(2)
+    with colx1:
+        target_x = st.number_input(
+            "총 점수 x (이 값에 가장 가까운 모델 점수를 만드는 k, n을 찾습니다)",
+            min_value=0,
+            max_value=5_000_000,
+            value=5000,
+            step=10,
+        )
+    with colx2:
+        days = st.number_input(
+            "진행 일수 (예: 8)",
+            min_value=1,
+            max_value=365,
+            value=8,
+            step=1,
+        )
 
     st.subheader("2. 활동치 k 탐색 범위 설정")
+
     col1, col2 = st.columns(2)
     with col1:
         k_min = st.number_input(
@@ -494,7 +567,7 @@ def calculator_three():
                 k_min=k_min,
                 k_max=k_max,
                 k_step=k_step,
-                days=8,
+                days=days,
                 top_k=top_k,
             )
 
@@ -506,11 +579,12 @@ def calculator_three():
             best_diff, best_k, best_n, best_x_hat, best_P, best_a, best_m = results[0]
 
             st.subheader("📌 가장 근접한 조합 (1위)")
+
             col_a, col_b = st.columns(2)
             with col_a:
                 st.metric("평균 활동치 k", f"{best_k}")
                 st.metric("평균 활동 횟수 n (1일 기준)", f"{best_n}")
-                st.metric("누적 활동치 P = 8 × k × n", f"{best_P}")
+                st.metric(f"누적 활동치 P = {days} × k × n", f"{best_P}")
             with col_b:
                 st.metric("누적 보너스 a(P)", f"{best_a}")
                 st.metric("활동 보너스 m(k)", f"{best_m}")
@@ -520,7 +594,8 @@ def calculator_three():
                 f"""
 **입력한 총 점수 x**: `{target_x}`  
 **모델 총 점수**: `{best_x_hat}`  
-**차이 (|x - 모델|)**: `{best_diff}`
+**차이 (|x - 모델|)**: `{best_diff}`  
+**진행 일수 days**: `{days}` 일
 """
             )
 
@@ -534,7 +609,7 @@ def calculator_three():
                             "차이 |x - 모델|": diff,
                             "k (평균 활동 점수)": k,
                             "n (1일 평균 횟수)": n,
-                            "P = 8×k×n": P,
+                            f"P = {days}×k×n": P,
                             "a(P)": a,
                             "m(k)": m,
                             "모델 총 점수 (590+m+a)": x_hat,
@@ -546,14 +621,16 @@ def calculator_three():
 
     st.markdown(
         """
-**추가 메모**  
-- 현재는 `P = 8 × k × n` 기준으로 8일 간 평균을 계산합니다.  
-- 실제 로직이 바뀌면 `compute_P` 내부만 수정해서 재사용할 수 있습니다.
+**메모**  
+
+- “몇 일차인지”를 `days`로 입력받아서, 해당 일수 동안의 평균 k, n을 추론합니다.  
+- 이벤트 일수가 고정이라면 `days` 기본값을 그 일수로 두고 사용하시면 됩니다.
 """,
         unsafe_allow_html=True,
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 # =========================================================
