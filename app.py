@@ -1,19 +1,21 @@
+import math
+import pandas as pd
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 # ---------------------
-# 페이지 기본 설정
+# 페이지 기본 설정 (한 번만!)
 # ---------------------
 st.set_page_config(
-    page_title="통합 데미지 계산기",
+    page_title="통합 데미지 & 점수 계산기",
     page_icon="🧮",
     layout="wide",
 )
 
 # ---------------------
-# 커스텀 CSS (전부 문자열 안에 있음!) 
+# 커스텀 CSS
 # ---------------------
 st.markdown(
     """
@@ -25,7 +27,7 @@ st.markdown(
 
     /* 내용 영역 여백 & 폭 */
     .block-container {
-        padding-top: 4rem;   /* 🔽 제목 잘리지 않도록 위쪽 여백 */
+        padding-top: 4rem;   /* 제목 잘리지 않도록 */
         padding-bottom: 3rem;
         max-width: 1100px;
     }
@@ -36,23 +38,32 @@ st.markdown(
         font-weight: 800;
         letter-spacing: -0.03em;
         margin-bottom: 0.3rem;
+        color: #111827;
     }
 
     .main-subtitle {
         font-size: 0.95rem;
-        color: #6b7280;
+        color: #4b5563;
         margin-bottom: 1.4rem;
     }
 
     /* 계산기 카드 */
     .calculator-card {
-        background: rgba(255, 255, 255, 0.92);
+        background: rgba(255, 255, 255, 0.96);
         border-radius: 20px;
         padding: 1.6rem 1.9rem;
         border: 1px solid rgba(148, 163, 184, 0.2);
         box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
         backdrop-filter: blur(10px);
         margin-bottom: 1.5rem;
+
+        /* 다크 모드에서도 글자 진하게 보이도록 */
+        color: #111827;
+    }
+
+    /* 카드 안의 모든 텍스트/레이블을 진한 글자색으로 고정 */
+    .calculator-card * {
+        color: #111827 !important;
     }
 
     /* 탭 스타일 */
@@ -330,12 +341,214 @@ def calculator_two():
 
 
 # =========================================================
-# 계산기 3 : (추가용 자리)
+# 계산기 3 : 특수 점수 계산기 (k, n 추론기)
 # =========================================================
 def calculator_three():
+    # -----------------------------
+    # 점수 계산 로직
+    # -----------------------------
+    def compute_a(P: int) -> int:
+        bonus_table = [
+            ([900, 1800, 2700], 40),
+            ([4500, 9000, 15000, 24000, 36000], 100),
+            ([45000, 60000, 72000, 90000], 160),
+            ([126000, 180000, 240000, 330000], 2000),
+            (
+                [
+                    375000, 420000, 480000, 540000, 600000,
+                    675000, 788000, 900000, 1050000, 1200000, 1350000
+                ],
+                300,
+            ),
+        ]
+
+        a = 0
+        for thresholds, bonus in bonus_table:
+            for t in thresholds:
+                if P >= t:
+                    a += bonus
+        return a
+
+    def compute_m(k: int) -> int:
+        if k < 3800:
+            return 0
+        if k <= 4800:
+            return 27
+        extra = (k - 4800) // 80
+        return 27 + extra
+
+    def search_best_k_n(
+        target_score: int,
+        k_min: int,
+        k_max: int,
+        k_step: int,
+        n_min: int = 1,
+        n_max: int = 30,
+        top_k: int = 5,
+    ):
+        best_list = []  # (diff, k, n, total, P, a, m)
+
+        for k in range(k_min, k_max + 1, k_step):
+            for n in range(n_min, n_max + 1):
+                P = k * n
+                a = compute_a(P)
+                m = compute_m(k)
+                total = 590 + a + m
+                diff = abs(total - target_score)
+
+                best_list.append((diff, k, n, total, P, a, m))
+
+        best_list.sort(key=lambda x: x[0])
+        return best_list[:top_k]
+
+    # -----------------------------
+    # UI
+    # -----------------------------
     st.markdown("<div class='calculator-card'>", unsafe_allow_html=True)
-    st.markdown("### 🧪 계산기 3 (추가 예정)")
-    st.info("여기에 3번 계산기 코드를 넣으면 됩니다.")
+
+    st.markdown("### 📊 특수 점수 계산기 (k, n 추론기)")
+
+    st.markdown(
+        """
+입력한 **목표 점수**에 대해,  
+주어진 규칙(활동치 k, 횟수 n, P에 따른 보너스)을 이용해  
+가장 근접한 점수가 나오도록 하는 `(k, n)` 조합을 탐색합니다.
+
+- 누적 활동치: `P = k × n`
+- 최종 모델 점수: `590 + a(P) + m(k)`
+""",
+        unsafe_allow_html=True,
+    )
+
+    st.subheader("1. 목표 점수 입력")
+
+    target_score = st.number_input(
+        "목표 점수 (이 값에 가장 가까운 모델 점수를 찾습니다)",
+        min_value=0,
+        max_value=5_000_000,
+        value=5000,
+        step=10,
+    )
+
+    st.subheader("2. 탐색 범위 설정")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        k_min = st.number_input(
+            "활동치 k 최소값",
+            min_value=0,
+            max_value=2_000_000,
+            value=3800,
+            step=100,
+        )
+    with col2:
+        k_max = st.number_input(
+            "활동치 k 최대값",
+            min_value=k_min + 1,
+            max_value=2_000_000,
+            value=50000,
+            step=100,
+        )
+
+    k_step = st.number_input(
+        "활동치 k 탐색 간격 (step, 너무 작게 하면 느려질 수 있음)",
+        min_value=1,
+        max_value=10000,
+        value=20,
+        step=1,
+    )
+
+    col3, col4 = st.columns(2)
+    with col3:
+        n_min = st.number_input(
+            "횟수 n 최소값",
+            min_value=1,
+            max_value=30,
+            value=1,
+            step=1,
+        )
+    with col4:
+        n_max = st.number_input(
+            "횟수 n 최대값 (최대 30)",
+            min_value=n_min,
+            max_value=30,
+            value=30,
+            step=1,
+        )
+
+    top_k = st.slider("상위 몇 개 조합을 볼까요?", min_value=1, max_value=20, value=5)
+
+    st.markdown("---")
+
+    if st.button("🔍 k, n 추론하기"):
+        with st.spinner("탐색 중..."):
+            results = search_best_k_n(
+                target_score=target_score,
+                k_min=k_min,
+                k_max=k_max,
+                k_step=k_step,
+                n_min=n_min,
+                n_max=n_max,
+                top_k=top_k,
+            )
+
+        if not results:
+            st.warning("결과가 없습니다. k 범위와 step 값을 다시 확인해 주세요.")
+        else:
+            st.success("탐색 완료!")
+
+            best_diff, best_k, best_n, best_total, best_P, best_a, best_m = results[0]
+
+            st.subheader("📌 최적에 가장 가까운 조합 (1위)")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("활동치 k", f"{best_k}")
+                st.metric("횟수 n", f"{best_n}")
+                st.metric("누적 활동치 P = k × n", f"{best_P}")
+            with col_b:
+                st.metric("평가 보너스 a(P)", f"{best_a}")
+                st.metric("활동 보너스 m(k)", f"{best_m}")
+                st.metric("모델 점수 (590 + a + m)", f"{best_total}")
+
+            st.markdown(
+                f"""
+**목표 점수**: `{target_score}`  
+**모델 점수**: `{best_total}`  
+**차이 (|목표 - 모델|)**: `{best_diff}`
+"""
+            )
+
+            if len(results) > 1:
+                st.subheader(f"상위 {len(results)}개 조합 상세")
+
+                rows = []
+                for diff, k, n, total, P, a, m in results:
+                    rows.append(
+                        {
+                            "차이 |target - model|": diff,
+                            "k": k,
+                            "n": n,
+                            "P = k×n": P,
+                            "a(P)": a,
+                            "m(k)": m,
+                            "모델 점수(590+a+m)": total,
+                        }
+                    )
+
+                df = pd.DataFrame(rows)
+                st.dataframe(df, use_container_width=True)
+
+    st.markdown(
+        """
+**참고:**  
+- 이 계산기는 주어진 규칙에 따라 **(k, n)에 따른 점수 모델을 그대로 구현**한 것입니다.  
+- 실제 시스템에서 `x`(기본 점수)가 따로 있다면, `590 + a + m + x` 형태로 확장 가능합니다.  
+- 규칙이나 구간이 바뀌면 `compute_a` / `compute_m` 함수만 수정하면 됩니다.
+""",
+        unsafe_allow_html=True,
+    )
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -346,16 +559,16 @@ def main():
     st.markdown(
         """
         <div>
-            <div class="main-title">통합 데미지 계산 대시보드</div>
+            <div class="main-title">통합 데미지 & 점수 계산 대시보드</div>
             <div class="main-subtitle">
-                무기 효율 비교, 실시간 데미지 3D 그래프 등 여러 계산기를 하나의 화면에서 사용하세요.
+                무기 효율 비교, 실시간 데미지 3D 그래프, 특수 점수 (k, n 추론) 계산기를 한 화면에서 제공합니다.
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    tab1, tab2, tab3 = st.tabs(["무기 효율 계산기", "3D 데미지 그래프", "계산기 3"])
+    tab1, tab2, tab3 = st.tabs(["무기 효율 계산기", "3D 데미지 그래프", "특수 점수 계산기"])
 
     with tab1:
         calculator_one()
