@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 # ---------------------
-# 페이지 기본 설정 (한 번만!)
+# 페이지 기본 설정 (한 번만)
 # ---------------------
 st.set_page_config(
     page_title="통합 데미지 & 점수 계산기",
@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # ---------------------
-# 커스텀 CSS
+# 공통 CSS (다크모드에서도 글자 잘 보이게)
 # ---------------------
 st.markdown(
     """
@@ -25,22 +25,29 @@ st.markdown(
         background: radial-gradient(circle at top left, #e0f2fe 0, #fdf2ff 35%, #ffffff 100%);
     }
 
-    /* 내용 영역 여백 & 폭 */
+    /* 컨텐츠 영역 여백 & 폭 */
     .block-container {
-        padding-top: 4rem;   /* 제목 잘리지 않도록 */
+        padding-top: 4rem;   /* 제목 안 잘리도록 */
         padding-bottom: 3rem;
         max-width: 1100px;
     }
 
-    /* 상단 타이틀 영역 */
+    /* 기본 텍스트 색 강제 (다크모드 대비) */
+    html, body, .stApp, .block-container {
+        color: #111827;
+    }
+    /* 거의 모든 텍스트를 진한 색으로 */
+    * {
+        color: #111827 !important;
+    }
+
+    /* 상단 타이틀/서브타이틀 */
     .main-title {
         font-size: 2.2rem;
         font-weight: 800;
         letter-spacing: -0.03em;
         margin-bottom: 0.3rem;
-        color: #111827;
     }
-
     .main-subtitle {
         font-size: 0.95rem;
         color: #4b5563;
@@ -67,33 +74,22 @@ st.markdown(
         border-radius: 999px;
         background-color: rgba(255, 255, 255, 0.85);
         border: 1px solid rgba(148, 163, 184, 0.5);
-        color: #111827 !important;
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #4f46e5, #ec4899);
-        color: white !important;
+        color: #ffffff !important;   /* 선택된 탭만 흰색 글자 */
         border: none;
-    }
-
-    /* 🔥 여기서부터가 핵심: 페이지 전체 텍스트 색 강제 */
-    html, body, .stApp, .block-container,
-    .calculator-card, .calculator-card * ,
-    p, span, label,
-    .stMarkdown, .stText, .stRadio, .stNumberInput,
-    .stSlider, .stSelectbox, .stDataFrame, .stMetric, .stCheckbox {
-        color: #111827 !important;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-
 # =========================================================
 # 계산기 1 : 무기 효율 계산기
 # =========================================================
 def calculator_one():
-    # ------- 내부 계산 함수 -------
+    # 최종 데미지 계산 함수
     def compute_z(buff_x, buff_y, atk, E_def, def_coef, Weak_coef, sk_coef):
         numer = atk ** 2
         denomi = atk + E_def * (1 - def_coef * 0.01)
@@ -127,7 +123,7 @@ def calculator_one():
     buff_x = st.sidebar.number_input("피해 증가(%)", min_value=0.0, max_value=800.0, value=0.0, step=10.0, format="%.0f")
     buff_y = st.sidebar.number_input("치명 피해(%)", min_value=0.0, max_value=500.0, value=120.0, step=10.0, format="%.0f")
 
-    # 직군
+    # 인형 포지션
     st.subheader("인형 포지션")
     choice_doll = st.radio(
         "무기 옵션",
@@ -144,14 +140,13 @@ def calculator_one():
     elif choice_doll == "서포트":
         atk_per = 17.0
         ct_per = 0.0
-    elif choice_doll == "불워크":
+    else:  # 불워크
         atk_per = 0.0
         ct_per = 0.0
     st.markdown("---")
 
-    # ----------------- 무기 A -----------------
+    # 무기 A
     st.subheader("무기 A")
-
     col1, col2 = st.columns([2, 1])
     with col1:
         wep_atk_A_slider = st.slider("무기 공격력", 200.0, 390.0, 390.0, step=1.0, format="%.0f", key="wep_atk_A")
@@ -169,7 +164,7 @@ def calculator_one():
     )
     if choice_A == "공격 보너스 15%":
         wepA_ak = 15.0
-    elif choice_A == "치명타 피해 25%":
+    else:
         wepA_ct = 25.0
 
     def_A = st.number_input("방어 무시(%)", min_value=0.0, max_value=20.0, value=0.0, step=10.0, format="%.0f", key="def_ignore_A")
@@ -183,12 +178,10 @@ def calculator_one():
     dmg_A = dmg_A_input
 
     st.write(f"관리실 공격력: {(atk_origin+wep_atk_A)*(1+(atk_bonus+atk_per+wepA_ak)*0.01):.0f}")
-
     st.markdown("---")
 
-    # ----------------- 무기 B -----------------
+    # 무기 B
     st.subheader("무기 B")
-
     col1, col2 = st.columns([2, 1])
     with col1:
         wep_atk_B_slider = st.slider("무기 공격력", 200.0, 390.0, 390.0, step=1.0, format="%.0f", key="wep_atk_B")
@@ -206,7 +199,7 @@ def calculator_one():
     )
     if choice_B == "공격 보너스 15%":
         wepB_ak = 15.0
-    elif choice_B == "치명타 피해 25%":
+    else:
         wepB_ct = 25.0
 
     def_B = st.number_input("방어 무시(%)", min_value=0.0, max_value=20.0, value=0.0, step=10.0, format="%.0f", key="def_ignore_B")
@@ -220,7 +213,6 @@ def calculator_one():
     dmg_B = dmg_B_input
 
     st.write(f"관리실 공격력: {(atk_origin+wep_atk_B)*(1+(atk_bonus+atk_per+wepB_ak)*0.01):.0f}")
-
     st.markdown("---")
 
     # 결과 계산
@@ -262,7 +254,6 @@ def calculator_one():
     efficiency_curve = [(b/a - 1) * 100 if a != 0 else 0 for a, b in zip(damage_curve_A, damage_curve_B)]
 
     fig, ax1 = plt.subplots(figsize=(9, 6))
-
     ax1.plot(atk_range, damage_curve_A, label="Weapon A", color="blue")
     ax1.plot(atk_range, damage_curve_B, label="Weapon B", color="red")
     ax1.axvline(final_atk_A, color="blue", linestyle=":")
@@ -284,10 +275,9 @@ def calculator_one():
 
 
 # =========================================================
-# 계산기 2 : 실시간 데미지 계산 3D 그래프
+# 계산기 2 : 실시간 데미지 3D 그래프
 # =========================================================
 def calculator_two():
-    # z 계산 함수
     def compute_z(x, y, atk, defense, w, skill, multiplier):
         numerator = atk ** 2
         denominator = atk + defense * (1 - w * 0.01)
@@ -303,10 +293,10 @@ def calculator_two():
         unsafe_allow_html=True
     )
 
-    st.latex(r'''\small
-    z = \left( \frac{{\text{공격력}^2}}{{\text{공격력} + \text{적 방어력} \cdot (1 - 방깎)}} \right)
-    \cdot (피증) \cdot (약점계수) \cdot (스킬계수) \cdot (치피)
-    ''')
+    st.latex(r"""\small
+z = \left( \frac{\text{공격력}^2}{\text{공격력} + \text{적 방어력} \cdot (1 - \text{방깎})} \right)
+\cdot (\text{피증}) \cdot (\text{약점계수}) \cdot (\text{스킬계수}) \cdot (\text{치피})
+""")
 
     multiplier = st.radio("약점 계수:", [1.0, 1.1, 1.2], index=0, horizontal=True)
     skill = st.slider("스킬 계수 %", 10, 800, 100, step=10)
@@ -344,7 +334,7 @@ def calculator_two():
 
 
 # =========================================================
-# 계산기 3 : 특수 점수 계산기 (k, n 추론기)
+# 계산기 3 : 특수 점수 계산기 (평균 k, n 추론) - 최신 로직 반영
 # =========================================================
 def calculator_three():
     # -----------------------------
@@ -364,7 +354,6 @@ def calculator_three():
                 300,
             ),
         ]
-
         a = 0
         for thresholds, bonus in bonus_table:
             for t in thresholds:
@@ -380,27 +369,30 @@ def calculator_three():
         extra = (k - 4800) // 80
         return 27 + extra
 
+    def compute_P(k: int, n: int, days: int = 8) -> int:
+        return days * k * n
+
+    def model_total_score(k: int, n: int, days: int = 8) -> tuple[int, int, int, int]:
+        P = compute_P(k, n, days=days)
+        a = compute_a(P)
+        m = compute_m(k)
+        total = 590 + m + a
+        return total, P, a, m
+
     def search_best_k_n(
-        target_score: int,
+        target_x: int,
         k_min: int,
         k_max: int,
         k_step: int,
-        n_min: int = 1,
-        n_max: int = 30,
+        days: int = 8,
         top_k: int = 5,
     ):
-        best_list = []  # (diff, k, n, total, P, a, m)
-
+        best_list = []
         for k in range(k_min, k_max + 1, k_step):
-            for n in range(n_min, n_max + 1):
-                P = k * n
-                a = compute_a(P)
-                m = compute_m(k)
-                total = 590 + a + m
-                diff = abs(total - target_score)
-
-                best_list.append((diff, k, n, total, P, a, m))
-
+            for n in range(1, 31):  # 하루 평균 횟수: 1~30
+                x_hat, P, a, m = model_total_score(k, n, days=days)
+                diff = abs(x_hat - target_x)
+                best_list.append((diff, k, n, x_hat, P, a, m))
         best_list.sort(key=lambda x: x[0])
         return best_list[:top_k]
 
@@ -409,32 +401,42 @@ def calculator_three():
     # -----------------------------
     st.markdown("<div class='calculator-card'>", unsafe_allow_html=True)
 
-    st.markdown("### 📊 특수 점수 계산기 (k, n 추론기)")
+    st.markdown("### 📊 특수 점수 계산기 (평균 k, n 추론)")
 
     st.markdown(
         """
-입력한 **목표 점수**에 대해,  
-주어진 규칙(활동치 k, 횟수 n, P에 따른 보너스)을 이용해  
-가장 근접한 점수가 나오도록 하는 `(k, n)` 조합을 탐색합니다.
+입력한 **총 점수 x**를 기준으로  
+8일 동안의 **평균 활동 점수 k**와 **평균 활동 횟수 n(1일 기준)** 을 추론합니다.
 
-- 누적 활동치: `P = k × n`
-- 최종 모델 점수: `590 + a(P) + m(k)`
+- 기간: 총 **8일**
+- 하루 평균 활동 횟수: `n` (1 ~ 30)
+- 평균 활동 점수: `k`
+- 누적 활동치: `P = 8 × k × n`
+- 활동 보너스 `m(k)`:
+  - k = 3800 ~ 4800 → 27점
+  - k > 4800 → 27 + ⌊(k - 4800) / 80⌋
+- 누적 보너스 `a(P)`:
+  - P = 900, 1800, 2700 → 각 +40
+  - P = 4500, 9000, 15000, 24000, 36000 → 각 +100
+  - P = 45000, 60000, 72000, 90000 → 각 +160
+  - P = 126000, 180000, 240000, 330000 → 각 +2000
+  - P = 375000, 420000, 480000, 540000, 600000, 675000, 788000, 900000, 1050000, 1200000, 1350000 → 각 +300
+- 총 점수 모델:  
+  \\( \\hat{x} = 590 + m(k) + a(P) \\)
 """,
         unsafe_allow_html=True,
     )
 
-    st.subheader("1. 목표 점수 입력")
-
-    target_score = st.number_input(
-        "목표 점수 (이 값에 가장 가까운 모델 점수를 찾습니다)",
+    st.subheader("1. 총 점수 x 입력")
+    target_x = st.number_input(
+        "총 점수 x (이 값에 가장 가까운 모델 점수를 만드는 k, n을 찾습니다)",
         min_value=0,
         max_value=5_000_000,
         value=5000,
         step=10,
     )
 
-    st.subheader("2. 탐색 범위 설정")
-
+    st.subheader("2. 활동치 k 탐색 범위 설정")
     col1, col2 = st.columns(2)
     with col1:
         k_min = st.number_input(
@@ -454,44 +456,25 @@ def calculator_three():
         )
 
     k_step = st.number_input(
-        "활동치 k 탐색 간격 (step, 너무 작게 하면 느려질 수 있음)",
+        "활동치 k 탐색 간격 (step, 너무 작게 하면 계산량 증가)",
         min_value=1,
         max_value=10000,
         value=20,
         step=1,
     )
 
-    col3, col4 = st.columns(2)
-    with col3:
-        n_min = st.number_input(
-            "횟수 n 최소값",
-            min_value=1,
-            max_value=30,
-            value=1,
-            step=1,
-        )
-    with col4:
-        n_max = st.number_input(
-            "횟수 n 최대값 (최대 30)",
-            min_value=n_min,
-            max_value=30,
-            value=30,
-            step=1,
-        )
-
     top_k = st.slider("상위 몇 개 조합을 볼까요?", min_value=1, max_value=20, value=5)
 
     st.markdown("---")
 
-    if st.button("🔍 k, n 추론하기"):
-        with st.spinner("탐색 중..."):
+    if st.button("🔍 평균 k, n 추론하기"):
+        with st.spinner("k, n 조합 탐색 중..."):
             results = search_best_k_n(
-                target_score=target_score,
+                target_x=target_x,
                 k_min=k_min,
                 k_max=k_max,
                 k_step=k_step,
-                n_min=n_min,
-                n_max=n_max,
+                days=8,
                 top_k=top_k,
             )
 
@@ -500,42 +483,41 @@ def calculator_three():
         else:
             st.success("탐색 완료!")
 
-            best_diff, best_k, best_n, best_total, best_P, best_a, best_m = results[0]
+            best_diff, best_k, best_n, best_x_hat, best_P, best_a, best_m = results[0]
 
-            st.subheader("📌 최적에 가장 가까운 조합 (1위)")
-
+            st.subheader("📌 가장 근접한 조합 (1위)")
             col_a, col_b = st.columns(2)
             with col_a:
-                st.metric("활동치 k", f"{best_k}")
-                st.metric("횟수 n", f"{best_n}")
-                st.metric("누적 활동치 P = k × n", f"{best_P}")
+                st.metric("평균 활동치 k", f"{best_k}")
+                st.metric("평균 활동 횟수 n (1일 기준)", f"{best_n}")
+                st.metric("누적 활동치 P = 8 × k × n", f"{best_P}")
             with col_b:
-                st.metric("평가 보너스 a(P)", f"{best_a}")
+                st.metric("누적 보너스 a(P)", f"{best_a}")
                 st.metric("활동 보너스 m(k)", f"{best_m}")
-                st.metric("모델 점수 (590 + a + m)", f"{best_total}")
+                st.metric("모델 총 점수 590 + m + a", f"{best_x_hat}")
 
             st.markdown(
                 f"""
-**목표 점수**: `{target_score}`  
-**모델 점수**: `{best_total}`  
-**차이 (|목표 - 모델|)**: `{best_diff}`
+**입력한 총 점수 x**: `{target_x}`  
+**모델 총 점수**: `{best_x_hat}`  
+**차이 (|x - 모델|)**: `{best_diff}`
 """
             )
 
             if len(results) > 1:
-                st.subheader(f"상위 {len(results)}개 조합 상세")
+                st.subheader(f"상위 {len(results)}개 후보")
 
                 rows = []
-                for diff, k, n, total, P, a, m in results:
+                for diff, k, n, x_hat, P, a, m in results:
                     rows.append(
                         {
-                            "차이 |target - model|": diff,
-                            "k": k,
-                            "n": n,
-                            "P = k×n": P,
+                            "차이 |x - 모델|": diff,
+                            "k (평균 활동 점수)": k,
+                            "n (1일 평균 횟수)": n,
+                            "P = 8×k×n": P,
                             "a(P)": a,
                             "m(k)": m,
-                            "모델 점수(590+a+m)": total,
+                            "모델 총 점수 (590+m+a)": x_hat,
                         }
                     )
 
@@ -544,10 +526,9 @@ def calculator_three():
 
     st.markdown(
         """
-**참고:**  
-- 이 계산기는 주어진 규칙에 따라 **(k, n)에 따른 점수 모델을 그대로 구현**한 것입니다.  
-- 실제 시스템에서 `x`(기본 점수)가 따로 있다면, `590 + a + m + x` 형태로 확장 가능합니다.  
-- 규칙이나 구간이 바뀌면 `compute_a` / `compute_m` 함수만 수정하면 됩니다.
+**추가 메모**  
+- 현재는 `P = 8 × k × n` 기준으로 8일 간 평균을 계산합니다.  
+- 실제 로직이 바뀌면 `compute_P` 내부만 수정해서 재사용할 수 있습니다.
 """,
         unsafe_allow_html=True,
     )
@@ -564,7 +545,7 @@ def main():
         <div>
             <div class="main-title">통합 데미지 & 점수 계산 대시보드</div>
             <div class="main-subtitle">
-                무기 효율 비교, 실시간 데미지 3D 그래프, 특수 점수 (k, n 추론) 계산기를 한 화면에서 제공합니다.
+                무기 효율 비교, 실시간 데미지 3D 그래프, 특수 점수 (평균 k, n 추론) 계산기를 한 화면에서 제공합니다.
             </div>
         </div>
         """,
