@@ -13,7 +13,7 @@ st.set_page_config(
 
 
 # ---------------------
-# 공통 CSS
+# CSS
 # ---------------------
 st.markdown(
     """
@@ -80,22 +80,7 @@ st.markdown(
         color: #111827 !important;
     }
 
-    .stTextInput > div > div > input {
-        background-color: #ffffff !important;
-        color: #111827 !important;
-    }
-
     .stNumberInput input {
-        background-color: #ffffff !important;
-        color: #111827 !important;
-    }
-
-    .stSelectbox div[role="combobox"] {
-        background-color: #ffffff !important;
-        color: #111827 !important;
-    }
-
-    .stTextArea textarea {
         background-color: #ffffff !important;
         color: #111827 !important;
     }
@@ -111,12 +96,12 @@ st.markdown(
 
 
 # =========================================================
-# 점수 계산 로직
+# 누적 보너스 계산
 # =========================================================
 def compute_a(P: int) -> int:
     """
-    누적 활동치 P에 따른 추가 평가점수 a(P)를 계산.
-    각 마일스톤을 넘을 때마다 보너스를 누적해서 더함.
+    누적 활동치 P에 따른 누적 보너스 a(P).
+    기존 보너스 구간 그대로 사용.
     """
     bonus_table = [
         ([1200, 2400, 3600], 40),
@@ -132,88 +117,70 @@ def compute_a(P: int) -> int:
         ),
     ]
 
-    a = 0
-    for thresholds, bonus in bonus_table:
-        for t in thresholds:
-            if P >= t:
-                a += bonus
+    bonus = 0
 
-    return a
+    for thresholds, value in bonus_table:
+        for threshold in thresholds:
+            if P >= threshold:
+                bonus += value
+
+    return bonus
 
 
-def compute_m(k: int) -> int:
+def compute_P(days: int, k: int, n: int) -> int:
     """
-    활동치 k에 따른 보너스 m(k) 계산.
-    기존 실제 계산식 그대로 유지.
+    누적 활동치 공식.
+
+    P = 650 + days × k × n + 10 × days
     """
-    if k < 3800:
-        return 0
-
-    if k <= 6000:
-        return 27
-
-    extra = (k - 6000) // 120
-    return 27 + extra
+    return 650 + days * k * n + 10 * days
 
 
-def compute_P(k: int, n: int, days: int) -> int:
+def infer_best_k(target_P: int, days: int, n: int) -> dict:
     """
-    days일 동안의 누적 활동치 P.
+    입력된 누적 활동치 target_P와 진행 일수 days 기준으로
+    특정 하루 활동횟수 n에 대한 최적 단일 활동치 k를 추론.
+
+    k는 정수로 반올림하여 사용.
     """
-    return days * k * n
+    raw_k = (target_P - 650 - 10 * days) / (days * n)
+
+    rounded_k = round(raw_k)
+
+    if rounded_k < 0:
+        rounded_k = 0
+
+    recalculated_P = compute_P(days=days, k=rounded_k, n=n)
+    diff = recalculated_P - target_P
+    abs_diff = abs(diff)
+
+    bonus = compute_a(recalculated_P)
+
+    return {
+        "하루 활동횟수 n": n,
+        "추론 k 원값": raw_k,
+        "최적화 단일 활동치 k": rounded_k,
+        "재계산 P": recalculated_P,
+        "입력 P와 오차": diff,
+        "절대 오차": abs_diff,
+        "누적 보너스 a(P)": bonus,
+    }
 
 
-def model_total_score(k: int, n: int, days: int) -> tuple[int, int, int, int]:
+def build_result_table(target_P: int, days: int) -> pd.DataFrame:
     """
-    (k, n, days)에 따른 모델 총점과 구성요소 계산.
-
-    total = 650 + m(k) + a(P)
-    """
-    P = compute_P(k, n, days)
-    a = compute_a(P)
-    m = compute_m(k)
-    total = 650 + m + a
-
-    return total, P, a, m
-
-
-def build_result_table(k: int, days: int) -> pd.DataFrame:
-    """
-    하루 횟수 n = 1 ~ 30 전체 결과표 생성.
+    n = 1 ~ 30 전체에 대한 최적 k 추론 결과표.
     """
     rows = []
 
-    prev_a = None
-    prev_total_score = None
-
     for n in range(1, 31):
-        total_score, P, a, m = model_total_score(k=k, n=n, days=days)
-        total_bonus = m + a
+        rows.append(infer_best_k(target_P=target_P, days=days, n=n))
 
-        if prev_a is None:
-            a_diff = 0
-            score_diff = 0
-        else:
-            a_diff = a - prev_a
-            score_diff = total_score - prev_total_score
+    df = pd.DataFrame(rows)
 
-        rows.append(
-            {
-                "하루 횟수 n": n,
-                f"누적 활동치 P = {days}×k×n": P,
-                "활동 보너스 m(k)": m,
-                "누적 보너스 a(P)": a,
-                "총 보너스 m+a": total_bonus,
-                "모델 총점 650+m+a": total_score,
-                "이전 n 대비 a(P) 증가": a_diff,
-                "이전 n 대비 총점 증가": score_diff,
-            }
-        )
+    df["추론 k 원값"] = df["추론 k 원값"].round(4)
 
-        prev_a = a
-        prev_total_score = total_score
-
-    return pd.DataFrame(rows)
+    return df
 
 
 # =========================================================
@@ -225,7 +192,7 @@ def main():
         <div>
             <div class="main-title">특수 점수 계산기</div>
             <div class="main-subtitle">
-                활동치 k와 진행 일수를 기준으로, 하루 횟수 1~30에 따른 모든 활동 보너스 값을 출력합니다.
+                누적 활동치 P와 진행 일수를 기준으로, 하루 활동횟수 1~30별 최적 단일 활동치 k를 추론합니다.
             </div>
         </div>
         """,
@@ -236,104 +203,126 @@ def main():
         "<p style='text-align: center; font-size: 12px; color: gray;'>Made by Caleo01</p>",
         unsafe_allow_html=True,
     )
-    st.sidebar.markdown("---")
-    st.sidebar.header("입력값 설정")
-
-    k = st.sidebar.number_input(
-        "활동치 k",
-        min_value=0,
-        max_value=2_000_000,
-        value=3800,
-        step=100,
-    )
-
-    days = st.sidebar.number_input(
-        "진행 일수",
-        min_value=1,
-        max_value=365,
-        value=8,
-        step=1,
-    )
 
     st.markdown("<div class='calculator-card'>", unsafe_allow_html=True)
 
-    st.markdown("### 📊 하루 횟수별 활동 보너스 출력")
+    st.markdown("### 📊 하루 활동횟수별 단일 활동치 k 추론")
 
     st.markdown(
         """
-입력한 **활동치 k**와 **진행 일수 days**를 기준으로,  
-하루 활동 횟수 `n = 1 ~ 30` 전체에 대해 누적 활동치와 보너스를 계산합니다.
+입력한 **누적 활동치 P**와 **진행 일수 days**를 기준으로,  
+하루 활동횟수 `n = 1 ~ 30` 각각에 대해 최적화된 단일 활동치 `k`를 계산합니다.
 
-- 진행 일수: `days`
-- 활동치: `k`
-- 하루 활동 횟수: `n = 1 ~ 30`
-- 누적 활동치: `P = days × k × n`
-- 활동 보너스: `m(k)`
-- 누적 보너스: `a(P)`
-- 총 점수 모델: `650 + m(k) + a(P)`
+계산식:
+
+`P = 650 + days × k × n + 10 × days`
+
+역산식:
+
+`k = (P - 650 - 10 × days) / (days × n)`
+
+정수 k가 필요하므로, 코드에서는 각 n별로 k를 반올림한 뒤 다시 P를 계산하고 오차를 표시합니다.
 """,
         unsafe_allow_html=True,
     )
 
-    st.markdown("---")
+    st.subheader("1. 입력값")
 
-    df = build_result_table(k=k, days=days)
-
-    m_value = compute_m(k)
-    n30_row = df.iloc[-1]
-
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2)
 
     with col1:
-        st.metric("입력 활동치 k", f"{k:,}")
+        target_P = st.number_input(
+            "누적 활동치 P",
+            min_value=0,
+            max_value=10_000_000,
+            value=500000,
+            step=100,
+        )
 
     with col2:
+        days = st.number_input(
+            "진행 일수 days",
+            min_value=1,
+            max_value=365,
+            value=8,
+            step=1,
+        )
+
+    st.markdown("---")
+
+    df = build_result_table(target_P=target_P, days=days)
+
+    input_bonus = compute_a(target_P)
+
+    best_row = df.loc[df["절대 오차"].idxmin()]
+
+    st.subheader("2. 요약")
+
+    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+
+    with metric_col1:
+        st.metric("입력 누적 활동치 P", f"{target_P:,}")
+
+    with metric_col2:
         st.metric("진행 일수", f"{days}일")
 
-    with col3:
-        st.metric("활동 보너스 m(k)", f"{m_value:,}")
+    with metric_col3:
+        st.metric("입력 P 기준 누적 보너스", f"{input_bonus:,}")
 
-    with col4:
-        st.metric("n=30 기준 총점", f"{n30_row['모델 총점 650+m+a']:,}")
-
-    st.markdown("---")
-
-    st.subheader("1. 하루 횟수 1~30 전체 결과")
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    with metric_col4:
+        st.metric("최소 오차", f"{int(best_row['절대 오차']):,}")
 
     st.markdown("---")
 
-    st.subheader("2. 하루 횟수별 보너스 변화")
+    st.subheader("3. 하루 활동횟수 1~30별 k 추론 결과")
 
-    chart_df = df.set_index("하루 횟수 n")[
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.markdown("---")
+
+    st.subheader("4. 오차가 가장 작은 조합")
+
+    best_col1, best_col2, best_col3, best_col4 = st.columns(4)
+
+    with best_col1:
+        st.metric("하루 활동횟수 n", f"{int(best_row['하루 활동횟수 n'])}")
+
+    with best_col2:
+        st.metric("최적화 단일 활동치 k", f"{int(best_row['최적화 단일 활동치 k']):,}")
+
+    with best_col3:
+        st.metric("재계산 P", f"{int(best_row['재계산 P']):,}")
+
+    with best_col4:
+        st.metric("누적 보너스 a(P)", f"{int(best_row['누적 보너스 a(P)']):,}")
+
+    st.markdown("---")
+
+    st.subheader("5. 하루 활동횟수별 추론 k 변화")
+
+    chart_df = df.set_index("하루 활동횟수 n")[
         [
+            "최적화 단일 활동치 k",
+            "절대 오차",
             "누적 보너스 a(P)",
-            "총 보너스 m+a",
-            "모델 총점 650+m+a",
         ]
     ]
 
     st.line_chart(chart_df)
 
-    st.markdown("---")
-
-    st.subheader("3. 보너스 증가 발생 구간")
-
-    increased_df = df[df["이전 n 대비 총점 증가"] > 0]
-
-    if increased_df.empty:
-        st.info("현재 입력값 기준으로 n=1~30 사이에서 추가 보너스 증가 구간이 없습니다.")
-    else:
-        st.dataframe(increased_df, use_container_width=True, hide_index=True)
-
     st.markdown(
         """
 **메모**
 
-- 이 계산기는 최적의 `k, n`을 추론하지 않습니다.
-- 입력한 `k`와 `days`를 고정한 뒤, 하루 횟수 `n = 1 ~ 30` 전체 결과를 화면에 출력합니다.
-- 점수 계산식은 `650 + m(k) + a(P)`입니다.
-- CSV 다운로드 기능은 넣지 않았습니다.
+- 이 코드는 사용자가 제공한 `P`와 `days`를 기준으로 `n = 1 ~ 30` 전체를 계산합니다.
+- 각 n마다 최적화된 단일 활동치 `k`를 추론합니다.
+- 누적 보너스 `a(P)`는 기존 보너스 구간을 그대로 사용합니다.
+- `k`는 정수로 반올림하여 적용합니다.
+- CSV 다운로드 기능은 없습니다.
 """,
         unsafe_allow_html=True,
     )
