@@ -467,7 +467,7 @@ def calculator_three():
         best_list = []
 
         for k in range(k_min, k_max + 1, k_step):
-            for n in range(1, 31):  # 하루 평균 횟수: 1 ~ 30
+            for n in range(20, 31):  # 하루 평균 횟수: 1 ~ 30
                 x_hat, P, a, m = model_total_score(k, n, days=days)
                 diff = abs(x_hat - target_x)
                 best_list.append((diff, k, n, x_hat, P, a, m))
