@@ -107,7 +107,8 @@ def compute_a(P: int) -> int:
         (
             [
                 500000, 560000, 640000, 720000, 800000,
-                900000, 1050000, 1200000, 1400000, 1600000, 1800000
+                900000, 1050000, 1200000, 1400000,
+                1600000, 1800000
             ],
             300,
         ),
@@ -135,93 +136,53 @@ def compute_P(days: int, k: int, n: int) -> int:
     return 650 + days * k * n + 10 * days
 
 
-def compute_total_score(days: int, k: int, n: int) -> tuple[int, int]:
+def compute_total_score(days: int, k: int, n: int) -> tuple[int, int, int]:
     """
     총 점수 tot.
 
     tot = P + a(P)
 
-    반환값:
+    반환:
     - total_score
     - P
+    - a(P)
     """
     P = compute_P(days=days, k=k, n=n)
-    total_score = P + compute_a(P)
-    return total_score, P
+    bonus = compute_a(P)
+    total_score = P + bonus
+
+    return total_score, P, bonus
 
 
-def find_best_k_for_n(target_total: int, days: int, n: int) -> dict:
+def find_best_k_for_n(
+    target_total: int,
+    days: int,
+    n: int,
+    k_min: int = 0,
+    k_max: int = 100,
+) -> dict:
     """
     특정 하루 활동횟수 n에 대해,
-    입력 총점 target_total에 가장 가까운 단일 활동치 k를 탐색.
+    k = 0 ~ 100 범위 안에서만 최적 단일 활동치 k를 탐색.
 
-    a(P)가 계단식 보너스라서 단순 역산이 아니라 탐색이 필요함.
-    total_score(k)는 k가 증가하면 감소하지 않는 단조 증가 함수이므로
-    이진 탐색 후 주변 후보를 비교한다.
+    1회당 얻을 수 있는 점수가 100점 이하라는 조건 반영.
     """
-
-    # 입력 총점이 기본 P보다 낮은 경우 k=0이 최선
-    base_total, base_P = compute_total_score(days=days, k=0, n=n)
-
-    if target_total <= base_total:
-        best_k = 0
-        best_total = base_total
-        best_P = base_P
-        best_a = compute_a(best_P)
-
-        return {
-            "하루 활동횟수 n": n,
-            "최적화 단일 활동치 k": best_k,
-            "누적 활동치 P": best_P,
-            "누적 보너스 a(P)": best_a,
-            "계산 총점 tot = P+a(P)": best_total,
-            "입력 총점과 오차": best_total - target_total,
-            "절대 오차": abs(best_total - target_total),
-        }
-
-    # 상한값 자동 확장
-    low = 0
-    high = 1
-
-    while True:
-        high_total, _ = compute_total_score(days=days, k=high, n=n)
-
-        if high_total >= target_total:
-            break
-
-        high *= 2
-
-        # 비정상적으로 커지는 경우 방어
-        if high > 10_000_000:
-            break
-
-    # 이진 탐색
-    while low <= high:
-        mid = (low + high) // 2
-        mid_total, _ = compute_total_score(days=days, k=mid, n=n)
-
-        if mid_total < target_total:
-            low = mid + 1
-        else:
-            high = mid - 1
-
-    # 경계 주변 후보 비교
-    candidates = set()
-
-    for candidate_k in range(max(0, low - 5), low + 6):
-        candidates.add(candidate_k)
 
     best = None
 
-    for candidate_k in candidates:
-        total_score, P = compute_total_score(days=days, k=candidate_k, n=n)
-        bonus = compute_a(P)
+    for k in range(k_min, k_max + 1):
+        total_score, P, bonus = compute_total_score(
+            days=days,
+            k=k,
+            n=n,
+        )
+
         diff = total_score - target_total
         abs_diff = abs(diff)
 
         row = {
             "하루 활동횟수 n": n,
-            "최적화 단일 활동치 k": candidate_k,
+            "최적화 단일 활동치 k": k,
             "누적 활동치 P": P,
             "누적 보너스 a(P)": bonus,
             "계산 총점 tot = P+a(P)": total_score,
@@ -235,7 +196,6 @@ def find_best_k_for_n(target_total: int, days: int, n: int) -> dict:
             if row["절대 오차"] < best["절대 오차"]:
                 best = row
             elif row["절대 오차"] == best["절대 오차"]:
-                # 오차가 같으면 더 낮은 k 우선
                 if row["최적화 단일 활동치 k"] < best["최적화 단일 활동치 k"]:
                     best = row
 
@@ -254,12 +214,12 @@ def build_result_table(target_total: int, days: int) -> pd.DataFrame:
                 target_total=target_total,
                 days=days,
                 n=n,
+                k_min=0,
+                k_max=100,
             )
         )
 
-    df = pd.DataFrame(rows)
-
-    return df
+    return pd.DataFrame(rows)
 
 
 # =========================================================
@@ -293,7 +253,11 @@ def main():
 
 `tot = P + a(P)`
 
-여기서 `a(P)`는 기존 누적 활동치 P 구간에 따른 누적 보너스입니다.
+제약 조건:
+
+`0 ≤ k ≤ 100`
+
+즉, 1회 활동으로 얻을 수 있는 점수는 최대 100점으로 제한합니다.
 """,
         unsafe_allow_html=True,
     )
@@ -307,8 +271,8 @@ def main():
             "총 점수 tot",
             min_value=0,
             max_value=20_000_000,
-            value=500_000,
-            step=100,
+            value=5000,
+            step=10,
         )
 
     with col2:
@@ -343,10 +307,7 @@ def main():
         st.metric("최소 오차", f"{int(best_row['절대 오차']):,}")
 
     with metric_col4:
-        st.metric(
-            "최소 오차 n",
-            f"{int(best_row['하루 활동횟수 n'])}",
-        )
+        st.metric("최소 오차 n", f"{int(best_row['하루 활동횟수 n'])}")
 
     st.markdown("---")
 
@@ -373,7 +334,7 @@ def main():
     with best_col2:
         st.metric(
             "최적화 단일 활동치 k",
-            f"{int(best_row['최적화 단일 활동치 k']):,}",
+            f"{int(best_row['최적화 단일 활동치 k'])}",
         )
 
     with best_col3:
@@ -402,12 +363,32 @@ def main():
 
     st.line_chart(chart_df)
 
+    st.markdown("---")
+
+    st.subheader("6. 도달 가능 여부")
+
+    reachable_df = df[df["절대 오차"] == 0]
+
+    if reachable_df.empty:
+        st.warning(
+            "현재 입력한 총점은 k=0~100, n=1~30 조건에서 정확히 일치하는 조합이 없습니다. "
+            "표의 절대 오차가 가장 작은 조합을 참고하세요."
+        )
+    else:
+        st.success("정확히 일치하는 조합이 있습니다.")
+        st.dataframe(
+            reachable_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+
     st.markdown(
         """
 **메모**
 
 - 입력값은 `총 점수 tot`와 `진행 일수 days`입니다.
 - `n = 1 ~ 30` 전체에 대해 최적화된 정수 `k`를 계산합니다.
+- `k`는 `0 ~ 100` 범위로 제한됩니다.
 - `P = 650 + days × k × n + 10 × days`입니다.
 - `tot = P + a(P)`입니다.
 - `a(P)`는 기존 P 구간별 누적 보너스를 그대로 사용합니다.
