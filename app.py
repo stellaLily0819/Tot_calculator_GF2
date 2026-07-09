@@ -3,10 +3,10 @@ import streamlit as st
 
 
 # ---------------------
-# 페이지 기본 설정
+# 페이지 설정
 # ---------------------
 st.set_page_config(
-    page_title="특수 점수 계산기",
+    page_title="활동치 역산 계산기",
     page_icon="📊",
     layout="wide",
 )
@@ -92,18 +92,17 @@ st.markdown(
 
 
 # =========================================================
-# 누적 보너스 a(P)
+# 누적 전투 점수 보너스
 # =========================================================
-def compute_a(P: int) -> int:
+def compute_bonus(cumulative_battle_score: int) -> int:
     """
-    누적 활동치 P에 따른 누적 보너스 a(P).
-    기존 P 구간 그대로 사용.
+    누적 전투 점수 구간에 따른 추가 활동치 보너스.
     """
     bonus_table = [
         ([1200, 2400, 3600], 40),
         ([6000, 12000, 20000, 32000, 48000], 100),
         ([60000, 80000, 96000, 120000], 160),
-        ([168000, 240000, 320000, 440000], 2000),
+        ([168000, 240000, 320000, 440000], 200),
         (
             [
                 500000, 560000, 640000, 720000, 800000,
@@ -118,114 +117,140 @@ def compute_a(P: int) -> int:
 
     for thresholds, value in bonus_table:
         for threshold in thresholds:
-            if P >= threshold:
+            if cumulative_battle_score >= threshold:
                 bonus += value
 
     return bonus
 
 
 # =========================================================
-# 기본 계산식
+# 전투 점수 → 1회 활동치 k
 # =========================================================
-def compute_P(days: int, k: int, n: int) -> int:
+def compute_k_from_battle_score(battle_score: int) -> int:
     """
-    누적 활동치 P.
+    전투 점수에 따른 1회 활동치 k.
 
-    P = 650 + days × k × n + 10 × days
+    - 전투 점수 6000점 미만: 0
+    - 전투 점수 6000점 이상: 최소 27
+    - 6000점 이후 120점마다 +1
     """
-    return 650 + days * k * n + 10 * days
+    if battle_score < 6000:
+        return 0
 
-
-def compute_tot(days: int, k: int, n: int) -> tuple[int, int, int]:
-    """
-    총 점수 tot.
-
-    tot = P + a(P)
-
-    반환:
-    - tot
-    - P
-    - a(P)
-    """
-    P = compute_P(days=days, k=k, n=n)
-    bonus = compute_a(P)
-    total = P + bonus
-
-    return total, P, bonus
+    return 27 + ((battle_score - 6000) // 120)
 
 
 # =========================================================
-# n별 최적 k 탐색
+# 총 활동치 계산
 # =========================================================
-def find_best_k_for_n(
+def compute_total_activity(
+    battle_score: int,
+    days: int,
+    n: int,
+) -> dict:
+    """
+    특정 전투 점수, 진행 일수, 하루 횟수 n 기준 총 활동치 계산.
+    """
+    base_activity = 650 + 10 * days
+
+    k = compute_k_from_battle_score(battle_score)
+
+    battle_count = days * n
+    cumulative_battle_score = battle_score * battle_count
+
+    battle_activity = k * battle_count
+    bonus_activity = compute_bonus(cumulative_battle_score)
+
+    total_activity = base_activity + battle_activity + bonus_activity
+
+    return {
+        "전투 점수": battle_score,
+        "1회 활동치 k": k,
+        "전투 횟수 합계": battle_count,
+        "누적 전투 점수": cumulative_battle_score,
+        "전투 활동치 합계": battle_activity,
+        "누적 보너스 활동치": bonus_activity,
+        "계산 tot": total_activity,
+    }
+
+
+# =========================================================
+# n별 최적 전투 점수 / k 탐색
+# =========================================================
+def find_best_for_n(
     target_tot: int,
     days: int,
     n: int,
-    k_min: int = 0,
-    k_max: int = 100,
+    battle_score_min: int = 6000,
+    battle_score_max: int = 20000,
+    battle_score_step: int = 10,
 ) -> dict:
     """
-    특정 n에 대해 target_tot에 가장 가까운 k를 찾는다.
-
-    k는 0~100 정수 범위에서만 탐색한다.
+    특정 n에 대해 입력 tot에 가장 가까운 전투 점수와 k를 탐색.
     """
+    best = None
 
-    best_row = None
-
-    for k in range(k_min, k_max + 1):
-        calculated_tot, P, bonus = compute_tot(
+    for battle_score in range(
+        battle_score_min,
+        battle_score_max + 1,
+        battle_score_step,
+    ):
+        result = compute_total_activity(
+            battle_score=battle_score,
             days=days,
-            k=k,
             n=n,
         )
 
-        diff = calculated_tot - target_tot
+        diff = result["계산 tot"] - target_tot
         abs_diff = abs(diff)
 
         row = {
-            "하루 활동횟수 n": n,
-            "추론 단일 활동치 k": k,
-            "누적 활동치 P": P,
-            "누적 보너스 a(P)": bonus,
-            "계산 tot = P+a(P)": calculated_tot,
+            "하루 횟수 n": n,
+            **result,
             "입력 tot": target_tot,
-            "오차 = 계산tot-입력tot": diff,
+            "오차": diff,
             "절대 오차": abs_diff,
         }
 
-        if best_row is None:
-            best_row = row
-        else:
-            if abs_diff < best_row["절대 오차"]:
-                best_row = row
-            elif abs_diff == best_row["절대 오차"]:
-                # 오차가 같으면 더 낮은 k 선택
-                if k < best_row["추론 단일 활동치 k"]:
-                    best_row = row
+        if best is None:
+            best = row
+            continue
 
-    return best_row
+        if row["절대 오차"] < best["절대 오차"]:
+            best = row
+        elif row["절대 오차"] == best["절대 오차"]:
+            # 오차가 같으면 더 낮은 전투 점수 우선
+            if row["전투 점수"] < best["전투 점수"]:
+                best = row
+
+    return best
 
 
-def build_result_table(target_tot: int, days: int) -> pd.DataFrame:
+def build_result_table(
+    target_tot: int,
+    days: int,
+    battle_score_min: int,
+    battle_score_max: int,
+    battle_score_step: int,
+) -> pd.DataFrame:
     """
-    n = 1~30 전체에 대해 최적 k를 추론한다.
+    n = 1~30 전체에 대해 최적 결과표 생성.
     """
     rows = []
 
     for n in range(1, 31):
         rows.append(
-            find_best_k_for_n(
+            find_best_for_n(
                 target_tot=target_tot,
                 days=days,
                 n=n,
-                k_min=0,
-                k_max=100,
+                battle_score_min=battle_score_min,
+                battle_score_max=battle_score_max,
+                battle_score_step=battle_score_step,
             )
         )
 
-    df = pd.DataFrame(rows)
-
-    return df
+    return pd.DataFrame(rows)
 
 
 # =========================================================
@@ -235,9 +260,9 @@ def main():
     st.markdown(
         """
         <div>
-            <div class="main-title">특수 점수 계산기</div>
+            <div class="main-title">활동치 역산 계산기</div>
             <div class="main-subtitle">
-                입력한 총 점수 tot에 가장 가까운 단일 활동치 k를 하루 활동횟수 1~30별로 추론합니다.
+                총 활동치 tot와 진행 일수를 기준으로, 하루 횟수 1~30별 최적 전투 점수와 1회 활동치 k를 추론합니다.
             </div>
         </div>
         """,
@@ -246,24 +271,23 @@ def main():
 
     st.markdown("<div class='calculator-card'>", unsafe_allow_html=True)
 
-    st.markdown("### 📊 하루 활동횟수별 k 추론")
+    st.markdown("### 📊 하루 횟수별 전투 점수 / 활동치 k 추론")
 
     st.markdown(
         """
-입력값은 **총 점수 tot**와 **진행 일수 days**입니다.
+입력값은 **총 활동치 tot**와 **진행 일수 days**입니다.
 
-코드는 하루 활동횟수 `n = 1 ~ 30`을 전부 계산하고,  
-각 `n`마다 입력한 `tot`에 가장 가까운 단일 활동치 `k`를 찾습니다.
+계산 구조:
 
-계산식:
+`기본 활동치 = 650 + 10 × days`
 
-`P = 650 + days × k × n + 10 × days`
+`1회 활동치 k = 27 + floor((전투 점수 - 6000) / 120)`
 
-`tot = P + a(P)`
+`누적 전투 점수 = 전투 점수 × days × n`
 
-제약 조건:
+`총 활동치 = 기본 활동치 + k × days × n + 누적 보너스`
 
-`0 ≤ k ≤ 100`
+누적 보너스는 기존 누적 전투 점수 구간을 그대로 사용합니다.
 """,
         unsafe_allow_html=True,
     )
@@ -274,11 +298,11 @@ def main():
 
     with col1:
         target_tot = st.number_input(
-            "총 점수 tot",
+            "총 활동치 tot",
             min_value=0,
-            max_value=20_000_000,
-            value=3000,
-            step=10,
+            max_value=100_000,
+            value=1202,
+            step=1,
         )
 
     with col2:
@@ -286,7 +310,38 @@ def main():
             "진행 일수 days",
             min_value=1,
             max_value=365,
-            value=8,
+            value=1,
+            step=1,
+        )
+
+    st.subheader("2. 탐색 범위")
+
+    col3, col4, col5 = st.columns(3)
+
+    with col3:
+        battle_score_min = st.number_input(
+            "전투 점수 최소값",
+            min_value=0,
+            max_value=1_000_000,
+            value=6000,
+            step=100,
+        )
+
+    with col4:
+        battle_score_max = st.number_input(
+            "전투 점수 최대값",
+            min_value=battle_score_min,
+            max_value=1_000_000,
+            value=20000,
+            step=100,
+        )
+
+    with col5:
+        battle_score_step = st.number_input(
+            "전투 점수 탐색 간격",
+            min_value=1,
+            max_value=1000,
+            value=10,
             step=1,
         )
 
@@ -295,44 +350,50 @@ def main():
     df = build_result_table(
         target_tot=target_tot,
         days=days,
+        battle_score_min=battle_score_min,
+        battle_score_max=battle_score_max,
+        battle_score_step=battle_score_step,
     )
 
     best_row = df.loc[df["절대 오차"].idxmin()]
 
-    st.subheader("2. 전체 최적 조합")
+    st.subheader("3. 전체 최적 결과")
 
-    col_a, col_b, col_c, col_d = st.columns(4)
+    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
 
-    with col_a:
+    with metric_col1:
         st.metric("입력 tot", f"{target_tot:,}")
 
-    with col_b:
-        st.metric("최적 n", f"{int(best_row['하루 활동횟수 n'])}")
+    with metric_col2:
+        st.metric("최적 n", f"{int(best_row['하루 횟수 n'])}")
 
-    with col_c:
-        st.metric("추론 k", f"{int(best_row['추론 단일 활동치 k'])}")
+    with metric_col3:
+        st.metric("전투 점수", f"{int(best_row['전투 점수']):,}")
 
-    with col_d:
-        st.metric("계산 tot", f"{int(best_row['계산 tot = P+a(P)']):,}")
+    with metric_col4:
+        st.metric("1회 활동치 k", f"{int(best_row['1회 활동치 k'])}")
 
     st.markdown(
         f"""
-**전체 최적 결과**
+**최적 조합 상세**
 
 - 입력 tot: `{target_tot:,}`
 - 진행 일수: `{days}`일
-- 최적 하루 활동횟수 n: `{int(best_row['하루 활동횟수 n'])}`
-- 추론 단일 활동치 k: `{int(best_row['추론 단일 활동치 k'])}`
-- 누적 활동치 P: `{int(best_row['누적 활동치 P']):,}`
-- 누적 보너스 a(P): `{int(best_row['누적 보너스 a(P)']):,}`
-- 계산 tot: `{int(best_row['계산 tot = P+a(P)']):,}`
-- 오차: `{int(best_row['오차 = 계산tot-입력tot']):,}`
+- 하루 횟수 n: `{int(best_row['하루 횟수 n'])}`
+- 전투 점수: `{int(best_row['전투 점수']):,}`
+- 1회 활동치 k: `{int(best_row['1회 활동치 k'])}`
+- 전투 횟수 합계: `{int(best_row['전투 횟수 합계'])}`
+- 누적 전투 점수: `{int(best_row['누적 전투 점수']):,}`
+- 전투 활동치 합계: `{int(best_row['전투 활동치 합계']):,}`
+- 누적 보너스 활동치: `{int(best_row['누적 보너스 활동치']):,}`
+- 계산 tot: `{int(best_row['계산 tot']):,}`
+- 오차: `{int(best_row['오차']):,}`
 """
     )
 
     st.markdown("---")
 
-    st.subheader("3. 하루 활동횟수 1~30별 추론 결과")
+    st.subheader("4. 하루 횟수 1~30별 추론 결과")
 
     st.dataframe(
         df,
@@ -342,9 +403,12 @@ def main():
 
     st.markdown("---")
 
-    st.subheader("4. 입력 tot에 가까운 순서")
+    st.subheader("5. 입력 tot에 가까운 순서")
 
-    sorted_df = df.sort_values("절대 오차", ascending=True)
+    sorted_df = df.sort_values(
+        by=["절대 오차", "하루 횟수 n"],
+        ascending=[True, True],
+    )
 
     st.dataframe(
         sorted_df,
@@ -354,35 +418,28 @@ def main():
 
     st.markdown("---")
 
-    st.subheader("5. 도달 가능 여부")
+    st.subheader("6. 예시 검증")
 
-    exact_df = df[df["절대 오차"] == 0]
-
-    if exact_df.empty:
-        st.warning(
-            "입력한 tot와 정확히 일치하는 조합은 없습니다. "
-            "위 표에서 절대 오차가 가장 작은 조합을 사용하세요."
-        )
-    else:
-        st.success("입력한 tot와 정확히 일치하는 조합이 있습니다.")
-        st.dataframe(
-            exact_df,
-            use_container_width=True,
-            hide_index=True,
-        )
+    example_battle_score = 7560
+    example_n = 3
+    example = compute_total_activity(
+        battle_score=example_battle_score,
+        days=1,
+        n=example_n,
+    )
 
     st.markdown(
-        """
-**메모**
+        f"""
+`days=1`, `n=3`, `전투 점수={example_battle_score}` 기준:
 
-- 이 코드는 `n`별로 tot를 임의 계산하는 코드가 아닙니다.
-- 입력한 `tot`에 가장 가까워지는 `k`를 `n=1~30` 각각에 대해 찾습니다.
-- 출력되는 `계산 tot`는 `P + a(P)`입니다.
-- `계산 tot`가 입력 tot와 가까울수록 좋은 추론 결과입니다.
-- `k`는 0~100 정수 범위에서만 탐색합니다.
-- CSV 다운로드 기능은 없습니다.
-""",
-        unsafe_allow_html=True,
+- 1회 활동치 k: `{example['1회 활동치 k']}`
+- 누적 전투 점수: `{example['누적 전투 점수']:,}`
+- 누적 보너스 활동치: `{example['누적 보너스 활동치']:,}`
+- 전투 활동치 합계: `{example['전투 활동치 합계']:,}`
+- 계산 tot: `{example['계산 tot']:,}`
+
+즉 `tot=1202`와 비교하면 오차는 `{example['계산 tot'] - 1202}`입니다.
+"""
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
